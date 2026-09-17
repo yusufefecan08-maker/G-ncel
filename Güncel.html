@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YKS Soru Takip ve Tekrar Sistemi</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+    <div class="max-w-5xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-extrabold text-indigo-400 mb-2">Soru Tekrar Takip Sistemi</h1>
+            <p class="text-slate-400 text-sm">Çözemediğin soruları kaydet; 1 gün, 1 hafta ve 1 ay sonraki tekrar tarihlerini otomatik takip et.</p>
+        </header>
+
+        <!-- Main Grid Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Left Column: Add Question Form -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl h-fit">
+                <h2 class="text-xl font-semibold text-slate-200 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-plus-circle text-indigo-400"></i> Yeni Soru Ekle
+                </h2>
+                <form id="question-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Ders / Kategori</label>
+                        <select id="subject-input" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                            <option value="Matematik">Matematik</option>
+                            <option value="Fizik">Fizik</option>
+                            <option value="Kimya">Kimya</option>
+                            <option value="Biyoloji">Biyoloji</option>
+                            <option value="Türkçe">Türkçe</option>
+                            <option value="Coğrafya">Coğrafya</option>
+                            <option value="Tarih / Felsefe">Tarih / Felsefe</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Soru Kaynağı / Not / Konu</label>
+                        <input type="text" id="title-input" required placeholder="Örn: Limit Türev Fasikülü - Test 3 Soru 5" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Çözememe Nedeni / Açıklama (Opsiyonel)</label>
+                        <textarea id="desc-input" rows="2" placeholder="Örn: İşlem hatası yaptım / Formülü unuttum" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Çözemediğin Tarih</label>
+                        <input type="date" id="date-input" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                    </div>
+
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-check"></i> Soruyu Kaydet & Planla
+                    </button>
+                </form>
+            </div>
+
+            <!-- Right Column: Schedule & Calendar Views -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Tabs / Filters -->
+                <div class="flex flex-wrap gap-2 bg-slate-900 border border-slate-800 p-2 rounded-2xl">
+                    <button onclick="switchTab('all')" id="tab-all" class="flex-1 py-2 px-3 text-xs font-medium rounded-xl bg-indigo-600 text-white transition-all">Tüm Sorular</button>
+                    <button onclick="switchTab('today')" id="tab-today" class="flex-1 py-2 px-3 text-xs font-medium rounded-xl text-slate-400 hover:bg-slate-800 transition-all">Bugünkü Tekrarlar</button>
+                    <button onclick="switchTab('calendar')" id="tab-calendar" class="flex-1 py-2 px-3 text-xs font-medium rounded-xl text-slate-400 hover:bg-slate-800 transition-all">Takvim Görünümü</button>
+                </div>
+
+                <!-- Questions List Container -->
+                <div id="content-container" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 id="list-title" class="text-xl font-semibold text-slate-200">Kayıtlı Sorular ve Tekrar Takvimi</h2>
+                        <span id="item-count" class="text-xs bg-indigo-950 text-indigo-300 px-3 py-1 rounded-full border border-indigo-800">0 Soru</span>
+                    </div>
+
+                    <div id="questions-list" class="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                        <!-- Dynamic items -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // Set today's date as default in date input
+        document.getElementById('date-input').valueAsDate = new Date();
+
+        let questions = JSON.parse(localStorage.getItem('yks_repeat_questions') || '[]');
+        let currentTab = 'all';
+
+        const form = document.getElementById('question-form');
+        const questionsList = document.getElementById('questions-list');
+        const itemCount = document.getElementById('item-count');
+        const listTitle = document.getElementById('list-title');
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const subject = document.getElementById('subject-input').value;
+            const title = document.getElementById('title-input').value;
+            const description = document.getElementById('desc-input').value;
+            const dateStr = document.getElementById('date-input').value;
+
+            const baseDate = new Date(dateStr);
+
+            // Calculate intervals: 1 day, 1 week (7 days), 1 month (30 days)
+            const addDays = (date, days) => {
+                let d = new Date(date);
+                d.setDate(d.getDate() + days);
+                return d.toISOString().split('T')[0];
+            };
+
+            const newQuestion = {
+                id: Date.now().toString(),
+                subject,
+                title,
+                description,
+                baseDate: dateStr,
+                reviews: {
+                    day1: addDays(baseDate, 1),
+                    week1: addDays(baseDate, 7),
+                    month1: addDays(baseDate, 30)
+                },
+                completed: {
+                    day1: false,
+                    week1: false,
+                    month1: false
+                }
+            };
+
+            questions.push(newQuestion);
+            saveAndRender();
+            form.reset();
+            document.getElementById('date-input').valueAsDate = new Date();
+        });
+
+        function saveAndRender() {
+            localStorage.setItem('yks_repeat_questions', JSON.stringify(questions));
+            renderContent();
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            ['all', 'today', 'calendar'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if (t === tab) {
+                    btn.className = "flex-1 py-2 px-3 text-xs font-medium rounded-xl bg-indigo-600 text-white transition-all";
+                } else {
+                    btn.className = "flex-1 py-2 px-3 text-xs font-medium rounded-xl text-slate-400 hover:bg-slate-800 transition-all";
+                }
+            });
+            renderContent();
+        }
+
+        function toggleReview(id, type) {
+            const q = questions.find(item => item.id === id);
+            if (q) {
+                q.completed[type] = !q.completed[type];
+                saveAndRender();
+            }
+        }
+
+        function deleteQuestion(id) {
+            if (confirm('Bu soruyu silmek istediğinize emin misiniz?')) {
+                questions = questions.filter(item => item.id !== id);
+                saveAndRender();
+            }
+        }
+
+        function renderContent() {
+            questionsList.innerHTML = '';
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            if (currentTab === 'calendar') {
+                listTitle.textContent = "Takvim ve Tekrar Akışı";
+                renderCalendarView();
+                return;
+            }
+
+            let filtered = questions;
+            if (currentTab === 'today') {
+                listTitle.textContent = "Bugün Tekrar Edilmesi Gerekenler";
+                filtered = questions.filter(q => 
+                    (q.reviews.day1 === todayStr && !q.completed.day1) ||
+                    (q.reviews.week1 === todayStr && !q.completed.week1) ||
+                    (q.reviews.month1 === todayStr && !q.completed.month1)
+                );
+            } else {
+                listTitle.textContent = "Kayıtlı Tüm Sorular";
+            }
+
+            itemCount.textContent = `${filtered.length} Soru`;
+
+            if (filtered.length === 0) {
+                questionsList.innerHTML = `
+                    <div class="text-center py-12 text-slate-500">
+                        <i class="fa-solid fa-folder-open text-4xl mb-2"></i>
+                        <p>Gösterilecek soru bulunamadı.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            filtered.forEach(q => {
+                const card = document.createElement('div');
+                card.className = "bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 flex flex-col gap-3";
+                
+                const isToday = (d) => d === todayStr;
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="text-xs bg-indigo-950 text-indigo-300 px-2.5 py-0.5 rounded-md border border-indigo-800/60 font-medium">${q.subject}</span>
+                            <h3 class="text-base font-semibold text-slate-100 mt-1">${q.title}</h3>
+                            ${q.description ? `<p class="text-xs text-slate-400 mt-0.5">${q.description}</p>` : ''}
+                        </div>
+                        <button onclick="deleteQuestion('${q.id}')" class="text-slate-500 hover:text-red-400 transition-colors p-1"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+
+                    <div class="border-t border-slate-700/50 pt-3 grid grid-cols-3 gap-2 text-xs">
+                        <!-- 1 Gün -->
+                        <div onclick="toggleReview('${q.id}', 'day1')" class="cursor-pointer p-2 rounded-lg border transition-all flex flex-col items-center justify-center ${q.completed.day1 ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300' : (isToday(q.reviews.day1) ? 'bg-amber-950/40 border-amber-600 text-amber-300 animate-pulse' : 'bg-slate-900/50 border-slate-700 text-slate-400')}">
+                            <span class="font-bold">1. Gün</span>
+                            <span class="text-[10px] opacity-80">${q.reviews.day1}</span>
+                            <span class="mt-1 font-semibold">${q.completed.day1 ? '✓ Tamamlandı' : 'Bekliyor'}</span>
+                        </div>
+
+                        <!-- 1 Hafta -->
+                        <div onclick="toggleReview('${q.id}', 'week1')" class="cursor-pointer p-2 rounded-lg border transition-all flex flex-col items-center justify-center ${q.completed.week1 ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300' : (isToday(q.reviews.week1) ? 'bg-amber-950/40 border-amber-600 text-amber-300 animate-pulse' : 'bg-slate-900/50 border-slate-700 text-slate-400')}">
+                            <span class="font-bold">1. Hafta</span>
+                            <span class="text-[10px] opacity-80">${q.reviews.week1}</span>
+                            <span class="mt-1 font-semibold">${q.completed.week1 ? '✓ Tamamlandı' : 'Bekliyor'}</span>
+                        </div>
+
+                        <!-- 1 Ay -->
+                        <div onclick="toggleReview('${q.id}', 'month1')" class="cursor-pointer p-2 rounded-lg border transition-all flex flex-col items-center justify-center ${q.completed.month1 ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300' : (isToday(q.reviews.month1) ? 'bg-amber-950/40 border-amber-600 text-amber-300 animate-pulse' : 'bg-slate-900/50 border-slate-700 text-slate-400')}">
+                            <span class="font-bold">1. Ay</span>
+                            <span class="text-[10px] opacity-80">${q.reviews.month1}</span>
+                            <span class="mt-1 font-semibold">${q.completed.month1 ? '✓ Tamamlandı' : 'Bekliyor'}</span>
+                        </div>
+                    </div>
+                `;
+                questionsList.appendChild(card);
+            });
+        }
+
+        function renderCalendarView() {
+            itemCount.textContent = `${questions.length} Soru Kayıtlı`;
+
+            let dateMap = {};
+            questions.forEach(q => {
+                ['day1', 'week1', 'month1'].forEach(type => {
+                    const d = q.reviews[type];
+                    if (!dateMap[d]) dateMap[d] = [];
+                    dateMap[d].push({ q, type, completed: q.completed[type] });
+                });
+            });
+
+            const sortedDates = Object.keys(dateMap).sort();
+
+            if (sortedDates.length === 0) {
+                questionsList.innerHTML = `
+                    <div class="text-center py-12 text-slate-500">
+                        <i class="fa-solid fa-calendar-days text-4xl mb-2"></i>
+                        <p>Takvimde planlanmış tekrar bulunmuyor.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            sortedDates.forEach(date => {
+                const items = dateMap[date];
+                const section = document.createElement('div');
+                section.className = "bg-slate-800/40 border border-slate-700/50 rounded-xl p-4 mb-4";
+                
+                const isToday = date === new Date().toISOString().split('T')[0];
+
+                let itemsHtml = items.map(item => `
+                    <div class="flex items-center justify-between bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 text-xs mt-2">
+                        <div>
+                            <span class="font-semibold text-indigo-300">[${item.q.subject}]</span> 
+                            <span class="text-slate-200 ml-1">${item.q.title}</span>
+                            <span class="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400">
+                                ${item.type === 'day1' ? '1 Günlük Tekrar' : (item.type === 'week1' ? '1 Haftalık Tekrar' : '1 Aylık Tekrar')}
+                            </span>
+                        </div>
+                        <button onclick="toggleReview('${item.q.id}', '${item.type}')" class="px-2.5 py-1 rounded-md font-semibold transition-all ${item.completed ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                            ${item.completed ? '✓ Tamamlandı' : 'Tamamla'}
+                        </button>
+                    </div>
+                `).join('');
+
+                section.innerHTML = `
+                    <div class="flex items-center justify-between border-b border-slate-700/50 pb-2">
+                        <h3 class="text-sm font-bold ${isToday ? 'text-amber-400 flex items-center gap-1.5' : 'text-slate-300'}">
+                            <i class="fa-regular fa-calendar"></i> ${date} ${isToday ? '(BUGÜN)' : ''}
+                        </h3>
+                        <span class="text-xs text-slate-400">${items.length} tekrar</span>
+                    </div>
+                    <div class="space-y-1">${itemsHtml}</div>
+                `;
+                questionsList.appendChild(section);
+            });
+        }
+
+        renderContent();
+    </script>
+</body>
+</html>
+
